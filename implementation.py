@@ -405,7 +405,7 @@ def pair_cancellation(original_field, p1, p2):
     min_nbs_high = min([gfield[a][b] for a,b in nbs_high])
     upperbound = min_nbs_low
     if min_nbs_high > min_nbs_low:
-        print('error, cannot cancelling the pair')
+        print('cannot cancelling the pair')
         return original_field
     for i in range(0, len(path_list)):
         avg_change = round((upperbound-min_nbs_high) / (len(path_list)-i+1), DECIMAL)
@@ -430,7 +430,7 @@ def pair_cancellation(original_field, p1, p2):
                     gfield[p] = hp
             upperbound = round(gfield[p], DECIMAL)
         else:
-            print('error, cannot cancelling the pair')
+            print('cannot cancelling the pair')
             return original_field
     return gfield
 
@@ -487,16 +487,16 @@ critical_dic = {}  # store the information of critical point, key is the xyz axi
 for c in critical_points:
     critical_dic[(c.key[0], c.key[1], c.value)] = c
 
-# construct KD tree
-LeafSize = 15 # Number of points at which to switch to brute-force, means how many leaf nodes do we have 
+# construct 2D KD tree
+LeafSize = 15 # Number of points at which to switch to brute-force 
 c_position = [[c[0], c[1]] for c in critical_dic.keys()]
 twoDTree = KDTree(np.array(c_position), leaf_size= LeafSize)
 twoDTree.get_arrays()[2]
-leaf = [s[2] for s in twoDTree.get_arrays()[2]]
+leaf = [s[2] for s in twoDTree.get_arrays()[2]]  # only need leaf nodes
 bound_start, bound_end = twoDTree.get_arrays()[3][0], twoDTree.get_arrays()[3][1]
 bound_start_leaf = [list(bound_start[i]) for i in range(0, len(leaf)) if leaf[i] == 1]
 bound_end_leaf = [list(bound_end[i]) for i in range(0, len(leaf)) if leaf[i] == 1]
-matrix_list = [gfield]
+matrix_list = []
 for i in range(0, len(bound_start_leaf)):
     r_s, c_s = bound_start_leaf[i]
     r_e, c_e = bound_end_leaf[i]
@@ -515,12 +515,13 @@ for j, field in enumerate(matrix_list):
     values = [p[1]-p[0] for p in ph]
     sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
     for i, pair in enumerate(sorted_indices):
-        if i == 6:
-            print('pause')
+        # if i == 6:
+        #     print('pause')
         if math.inf in pair or -math.inf in pair:
+            print('PH0: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
             continue
         field = pair_cancellation(field, pair[0], pair[1]) 
-        print(field, pair)
+        # print(field, pair)
         print('PH0: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
         # print(gfield[pair[0][0]][pair[0][1]], gfield[pair[1][0]][pair[1][1]])
     # print(np.round(field, 2))
@@ -531,12 +532,14 @@ for j, field in enumerate(matrix_list):
     sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
     for i, pair in enumerate(sorted_indices):
         if math.inf in pair or -math.inf in pair:
+            print('PH1: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
             continue
         neg_field = pair_cancellation(neg_field, pair[0], pair[1]) 
         
         print('PH1: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
     new_gfield_list.append(-neg_field)
 
+# concatenate together
 new_gfield = np.zeros((rows, cols))
 for i in range(0, len(bound_start_leaf)):
     row_start, col_start = bound_start_leaf[i]
@@ -566,6 +569,7 @@ values = [p[1]-p[0] for p in ph]
 sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
 for i, pair in enumerate(sorted_indices):
     if math.inf in pair or -math.inf in pair:
+        print('PH0: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
         continue
     gfield_can = pair_cancellation(gfield_can, pair[0], pair[1]) 
     print('PH0: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
@@ -576,6 +580,7 @@ values = [p[1]-p[0] for p in ph]
 sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
 for i, pair in enumerate(sorted_indices):
     if math.inf in pair or -math.inf in pair:
+        print('PH1: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
         continue
     neg_field = pair_cancellation(neg_field, pair[0], pair[1]) 
     print('PH1: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
