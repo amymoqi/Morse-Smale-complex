@@ -3,7 +3,6 @@ import math
 from classes import criticalPoint
 import numpy as np
 import gudhi
-from sklearn.neighbors import KDTree
 from collections import Counter
 from unionfind import UnionFind
 from collections import defaultdict
@@ -434,11 +433,6 @@ def pair_cancellation(original_field, p1, p2):
             return original_field
     return gfield
 
-
-
-
-
-
 def PH(field, four_neighbors: bool = True):
     """
     compute the Morse-Smale PH of a function: R^2 -> R
@@ -452,160 +446,51 @@ def PH(field, four_neighbors: bool = True):
     return p0, p1
 
 
-# ---------------------------------main---------------------------------
-# gfield = np.array([[-0.44, -0.15,  0.22,  0.79,  0.79,  0.66,  0.62, 0.72,  0.15,
-#         -0.12,  0.42,  1.35],
-#        [-0.76, -1.03, -0.32, -0.24, -0.38, -0.16,  0.66,  0.59,  0.33,
-#          0.73, -0.06,  0.3 ],
-#        [-0.98, -1.5 , -1.31, -1.17, -1.09, -0.3 ,  0.69,  1.23,  0.73,
-#          0.12, -0.19, -0.4 ],
-#        [-1.23, -1.49, -1.51, -2.01, -1.56, -0.31,  0.02,  0.43,  0.26,
-#         -0.24,  0.26,  0.2 ],
-#        [-1.04, -1.49, -1.63, -1.86, -1.34, -0.99,  0.14,  1.07,  0.3 ,
-#          0.19,  0.53,  1.36],
-#        [-1.64, -1.29, -1.41, -1.79, -1.63, -0.87, -0.02,  0.76,  0.56,
-#          0.3 ,  0.38,  0.85],
-#        [-2.25, -1.25, -1.3 , -2.02, -0.84, -0.7 ,  0.3 ,  0.74,  1.13,
-#          0.34,  0.44,  0.62],
-#        [-2.17, -1.44, -2.25, -2.28, -1.31, -0.77, -0.6 ,  0.26,  0.22,
-#          0.46,  0.57,  1.3 ],
-#        [-1.99, -2.1 , -1.73, -1.51, -1.15, -1.09, -0.73, -0.15,  0.35,
-#         -0.1 ,  0.12,  0.37],
-#        [-1.58, -1.18, -1.01, -1.15, -0.7 , -0.81, -0.03,  0.14, -0.11,
-#         -0.24,  0.09,  0.36]])
 
+def KDTree(points: list, nCuts: int, ending_boundary):
+    """
+    input: points: list of list that represents the coordinate of points, the dimension of the points determines the dimension of KD tree.
+           nCuts: how many times the space will be divided. ex: depth = 1, there will be 1 cut, the space is divided into 2 parts. depth = 3, there will be 3 cuts, 
+           the space is divided into 4 parts, etc.    
+    output: two lists called boundary_start and boundary_end that corresponding to the starting points and ending points of the cuts 
+    
+    This algorithm gives the KD tree, output the boundary of space that represents the leaves of the KD tree. The stopping criteria is when it runs out of the cuts. 
+    There might be the cases that a space only contains 1 point but the program wants to divde it, in this case the cut will be at the boundary, so the sapce will not be 
+    further divided. 
 
-SIZE= 20
-np.random.seed(42)
-gfield = gaussian_random_fields.gaussian_random_field(size = SIZE)
-gfield = np.round(gfield, 2)
-rows, cols = gfield.shape
+    The function automatically detects the dimensions.
+    
+    one example: points = [[2, 3], [5, 4], [9, 6], [4, 7], [8, 1], [7, 2]]
+                nCuts = 3
+    """
+    # Output lists for the start and end boundaries of each block
+    dim = len(points[0])
 
-# identify all the critical points
-critical_points = find_critical_points_4_neighbors(gfield=gfield)
-critical_dic = {}  # store the information of critical point, key is the xyz axis
-for c in critical_points:
-    critical_dic[(c.key[0], c.key[1], c.value)] = c
+    current_start = [0 for _ in range(0, dim)]
+    current_end = ending_boundary 
 
-# construct 2D KD tree
-LeafSize = 15 # Number of points at which to switch to brute-force 
-c_position = [[c[0], c[1]] for c in critical_dic.keys()]
-twoDTree = KDTree(np.array(c_position), leaf_size= LeafSize)
-twoDTree.get_arrays()[2]
-leaf = [s[2] for s in twoDTree.get_arrays()[2]]  # only need leaf nodes
-bound_start, bound_end = twoDTree.get_arrays()[3][0], twoDTree.get_arrays()[3][1]
-bound_start_leaf = [list(bound_start[i]) for i in range(0, len(leaf)) if leaf[i] == 1]
-bound_end_leaf = [list(bound_end[i]) for i in range(0, len(leaf)) if leaf[i] == 1]
-matrix_list = []
-for i in range(0, len(bound_start_leaf)):
-    r_s, c_s = bound_start_leaf[i]
-    r_e, c_e = bound_end_leaf[i]
-    matrix_list.append(gfield[int(r_s): int(r_e), int(c_s): int(c_e)])
+    areas = [(current_start,current_end)] # keep adding to this list and only return the last n+1
+    
+    for cut in range(0, nCuts):
+        axis = int(int(np.log2(cut+1)) % dim)
+        current_points = [point for point in points if all(current_start[i] <= point[i] < current_end[i] for i in range(dim))]
 
+        current_points.sort(key=lambda x: x[axis])
+        if len(current_points) == 0:
+                cutting_point = current_start[axis]
+        else:
+            median_idx = len(current_points) // 2
+            cutting_point = current_points[median_idx][axis]
+        left_end = current_end.copy()
+        left_end[axis] = cutting_point
+        areas.append((current_start, left_end))
 
-new_gfield_list = []
+        right_start = current_start.copy()
+        right_start[axis] = cutting_point
+        areas.append((right_start, current_end))
 
-p0, p1 = PH(gfield, True)
+        current_start, current_end = areas[areas.index((current_start,current_end)) + 1]
 
-
-for j, field in enumerate(matrix_list):
-    indices_ = [i for i in range(0, field.size)]
-    f1 = UnionFind(indices_)
-    indices, ph = merge_tree(f1, field, four_neighbors=True)
-    values = [p[1]-p[0] for p in ph]
-    sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
-    for i, pair in enumerate(sorted_indices):
-        # if i == 6:
-        #     print('pause')
-        if math.inf in pair or -math.inf in pair:
-            print('PH0: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
-            continue
-        field = pair_cancellation(field, pair[0], pair[1]) 
-        # print(field, pair)
-        print('PH0: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
-        # print(gfield[pair[0][0]][pair[0][1]], gfield[pair[1][0]][pair[1][1]])
-    # print(np.round(field, 2))
-    f2 = UnionFind(indices_)
-    neg_field = -field
-    indices, ph = merge_tree(f2, neg_field, four_neighbors=True)
-    values = [p[1]-p[0] for p in ph]
-    sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
-    for i, pair in enumerate(sorted_indices):
-        if math.inf in pair or -math.inf in pair:
-            print('PH1: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
-            continue
-        neg_field = pair_cancellation(neg_field, pair[0], pair[1]) 
-        
-        print('PH1: for gfield' + str(j), 'pair', i, 'out of' , len(sorted_indices), 'done')
-    new_gfield_list.append(-neg_field)
-
-# concatenate together
-new_gfield = np.zeros((rows, cols))
-for i in range(0, len(bound_start_leaf)):
-    row_start, col_start = bound_start_leaf[i]
-    row_end, col_end = bound_end_leaf[i]
-    new_gfield[int(row_start):int(row_end), int(col_start):int(col_end)] = new_gfield_list[i]
-
-# # concatenated13 = np.concatenate((new_gfield_list[0], new_gfield_list[2]), axis=0)
-# # concatenated24 = np.concatenate((new_gfield_list[1], new_gfield_list[3]), axis=0)
-# # new_gfield = np.concatenate((concatenated13, concatenated24), axis=1)
-# # new_gfield = np.round(new_gfield, 4)
-# # print(new_gfield)
-# # difference = np.abs(new_gfield - gfield)
-# # max_difference = np.max(difference)
-# # print('the max difference is', max_difference)
-
-
-new_p0, new_p1 = PH(new_gfield, True)
-bottleneck = gudhi.bottleneck_distance(p0+p1, new_p0+new_p1)
-print('the bottleneck distance is', bottleneck)
-
-# calculate true pair cancellation 
-gfield_can = deepcopy(gfield)
-indices_ = [i for i in range(0, gfield_can.size)]
-f1 = UnionFind(indices_)
-indices, ph = merge_tree(f1, gfield_can, four_neighbors=True)
-values = [p[1]-p[0] for p in ph]
-sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
-for i, pair in enumerate(sorted_indices):
-    if math.inf in pair or -math.inf in pair:
-        print('PH0: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
-        continue
-    gfield_can = pair_cancellation(gfield_can, pair[0], pair[1]) 
-    print('PH0: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
-f2 = UnionFind(indices_)
-neg_field = -gfield_can
-indices, ph = merge_tree(f2, neg_field, four_neighbors=True)
-values = [p[1]-p[0] for p in ph]
-sorted_indices = [index for index, value in sorted(zip(indices, values), key=lambda x: x[1])]
-for i, pair in enumerate(sorted_indices):
-    if math.inf in pair or -math.inf in pair:
-        print('PH1: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
-        continue
-    neg_field = pair_cancellation(neg_field, pair[0], pair[1]) 
-    print('PH1: for gfield_can', 'pair', i, 'out of' , len(sorted_indices), 'done')
-gfield_can = -neg_field
-
-
-figure, axis = plt.subplots(1, 3)
-
-axis[0].imshow(gfield)
-axis[0].set_title('Heatmap for Input Matrix')
-axis[1].imshow(new_gfield)
-axis[1].set_title('Heatmap for Output Matrix')
-axis[2].imshow(gfield_can)
-axis[2].set_title('Heatmap for Matrix with Overall Cancellation')
-plt.show()
-
-
-
-
-
-
-
-
-
-
-
+    return areas[-(nCuts + 1): ]
 
 
